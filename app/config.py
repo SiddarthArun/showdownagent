@@ -9,8 +9,11 @@ CHROMA_DIR = BASE_DIR / "chroma_db"
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=str(BASE_DIR / ".env"))
 
-    gemini_api_key: str
+    llm_backend: str = "gemini"
+    gemini_api_key: str | None = None
     model_name: str = "gemini-3.1-flash-lite"
+    ollama_model: str = "llama3.1"
+    ollama_url: str = "http://127.0.0.1:11434"
     retrieval_k: int = 3
 
 

@@ -1,6 +1,6 @@
 # Showdown Coach
 
-An AI-powered coaching tool for [Pokemon Showdown](https://pokemonshowdown.com/). Reads your live battle state directly from the browser, grounds its analysis in a real damage/type-effectiveness calculator (not LLM guesswork), retrieves relevant strategy context from Smogon via RAG, and gives you a turn-by-turn suggestion — while you stay in full control of every move.
+A local AI assistant for [Pokemon Showdown](https://play.pokemonshowdown.com/). The browser userscript reads the current battle, the local calculator computes matchup facts, the LLM reasons over those facts, and the terminal prints a legal move or switch suggestion. The coach never submits moves for you.
 
 ## How it works
 
@@ -18,52 +18,131 @@ Terminal (Rich-formatted output)
 
 The core design principle: the LLM never invents damage numbers, type matchups, or speed comparisons. A deterministic calculator computes those first; the LLM only reasons over facts it's been given, and its final move/switch choice is validated against what's actually legal before being shown to you.
 
-## Setup
+## Requirements
 
-**1. Clone and install**
+- Python 3.10+
+- A browser and Pokemon Showdown account
+- Tampermonkey or another userscript extension
+- Either a Gemini API key or Ollama with a downloaded model
+
+## Install
+
+The supported workflow is to keep the downloaded project folder and install
+its dependencies into your Python environment. This works from a Git clone,
+a downloaded ZIP, or a local source checkout.
+
+### Clone with Git
+
 ```bash
-git clone https://github.com/<your-username>/showdown-coach.git
+git clone <repository-url>
 cd showdown-coach
-pip install -e .
+python -m pip install -e .
 ```
 
-**2. Set your Gemini API key**
+### Download as a ZIP
 
-Get a free key from [Google AI Studio](https://aistudio.google.com/), then either:
+1. Download and extract the repository ZIP.
+2. Open a terminal in the extracted `showdown-coach` folder.
+3. Install it:
+
 ```bash
-showdown-coach set-key YOUR_KEY_HERE
+python -m pip install -e .
 ```
-or manually create a `.env` file in the project root:
+
+The editable install is intentional: the userscript, battle data, and
+`build_chroma.py` are repository files used during setup. Do not delete the
+extracted project folder after installing. On Windows, use `py -m pip` instead
+of `python -m pip` if `python` is not available. If the installed command is
+not found later, run `python -m app.cli info` from the project folder.
+
+The complete guide, including the exact test command and troubleshooting
+steps, is also available inside the CLI:
+
+```bash
+showdown-coach info
 ```
+
+## Configure the backend
+
+### Guided setup
+
+```bash
+showdown-coach setup
+```
+
+This creates or updates `.env` in the project directory. Choose `gemini` or `ollama` when prompted.
+
+### Gemini
+
+1. Get an API key from [Google AI Studio](https://aistudio.google.com/).
+2. Run `showdown-coach setup` and paste the key when prompted.
+
+The configuration looks like:
+
+```dotenv
+LLM_BACKEND=gemini
 GEMINI_API_KEY=your_key_here
 ```
 
-**3. Install the userscript**
-- Install the [Tampermonkey](https://www.tampermonkey.net/) browser extension.
-- Create a new script and paste in the contents of `extension/showdown-reader.user.js`.
-- Save.
+### Ollama
 
-**4. Build the local knowledge base** (one-time, or whenever Smogon data changes)
+1. Install Ollama from [ollama.com](https://ollama.com/).
+2. Start Ollama.
+3. Download a model:
+
 ```bash
-python -m scripts.build_pokedex
-python -m scripts.ingest_smogon
-python -m scripts.build_chroma
+ollama pull llama3.1
 ```
 
-**5. (Optional) Run a local Pokemon Showdown server** — needed for the evaluation harness, or if you'd rather test against bots than play on the public server:
-```bash
-git clone https://github.com/smogon/pokemon-showdown.git
-cd pokemon-showdown && npm install
-node pokemon-showdown start --no-security
+4. Run `showdown-coach setup`, choose `ollama`, and enter `llama3.1`.
+
+The configuration looks like:
+
+```dotenv
+LLM_BACKEND=ollama
+OLLAMA_MODEL=llama3.1
+OLLAMA_URL=http://127.0.0.1:11434
 ```
 
-## Usage
+To override the configured backend for one run:
+
+```bash
+showdown-coach start --backend ollama
+```
+
+## Install the userscript
+
+The script is the root-level file `userscript.js`.
+
+1. Install [Tampermonkey](https://www.tampermonkey.net/).
+2. Open the Tampermonkey dashboard and choose **Create a new script**.
+3. Remove the generated template and paste the entire `userscript.js` file.
+4. Save the script and make sure it is enabled.
+5. Keep the browser open while the coach is running.
+
+The script runs on `play.pokemonshowdown.com` and sends state to `http://127.0.0.1:8000/state`.
+
+## Build the strategy index
+
+The repository includes generated data under `data/`. Build the local ChromaDB
+index once from the project folder. This downloads/creates the local embedding
+store and can take a while the first time:
+
+```bash
+python build_chroma.py
+```
+
+Run this again only if the Smogon chunk data changes. The coach can start
+without the index, but it will not have Smogon retrieval context until the
+index is available.
+
+## Run the coach
 
 ```bash
 showdown-coach start
 ```
 
-Open a Pokemon Showdown battle in your browser. Suggestions print in the terminal each turn as they come in.
+Open a Pokemon Showdown battle in the same browser where the userscript is enabled. Suggestions appear in the terminal from turn 1 onward. The autogenerated turn 0 is ignored, and repeated state updates for a turn are ignored.
 
 Options:
 ```bash
@@ -71,21 +150,70 @@ showdown-coach start --port 8001
 showdown-coach start --backend ollama
 ```
 
+Stop the server with `Ctrl+C`.
+
+## CLI commands
+
+The installed command has only three commands:
+
+```text
+showdown-coach setup   Create or update .env
+showdown-coach start   Start the local coach server
+showdown-coach info    Show the complete setup and troubleshooting guide
+```
+
+If the command is not found after installation, run it as a module from the
+project folder:
+
+```bash
+python -m app.cli info
+```
+
+## Simple calculator check
+
+The project intentionally keeps its user-facing check small. It uses fixed
+offline battle scenarios and compares the calculator's best-damage move with
+the expected result of choosing uniformly at random from the same legal moves.
+It does not call Gemini, Ollama, the browser, or the live server.
+
+Run it from the project directory:
+
+```bash
+python tests/test_benchmark.py
+```
+
+The output reports:
+
+- Average damage from the calculator's prediction
+- Average damage from the random baseline
+- Percentage improvement over random
+- How often the calculator beats random
+- The selected move for each scenario
+
+This is a basic sanity check, not a claim of real battle win rate. It measures
+the deterministic calculator only; model quality and real-player outcomes need
+separate battle data.
+
+Compile-check the Python files if needed:
+
+```bash
+python -m compileall -q app tests
+```
+
+The command succeeds silently with exit code 0.
+
 ## LLM backends
 
 By default the coach uses Gemini (`gemini-3.1-flash-lite`, free tier). A local backend via [Ollama](https://ollama.com/) is also supported — useful for offline use, avoiding API rate limits during heavy testing, or comparing model quality.
 
-**To use Ollama:**
-```bash
-ollama pull llama3.1
-showdown-coach start --backend ollama
-```
-
-Or set it persistently in `.env`:
+**To use Ollama persistently**, set this in `.env`:
 ```
 LLM_BACKEND=ollama
 OLLAMA_MODEL=llama3.1
+OLLAMA_URL=http://127.0.0.1:11434
 ```
+
+The Ollama backend uses its local `/api/chat` endpoint and requests a JSON response in the same format as Gemini, so the existing decision validation applies to both backends.
 
 Smaller local models are noticeably weaker at multi-fact reasoning than Flash-Lite — the built-in decision validator (see below) catches and replaces any illegal or malformed suggestion regardless of backend, so switching models never risks an invalid move being issued.
 
@@ -97,28 +225,30 @@ Smaller local models are noticeably weaker at multi-fact reasoning than Flash-Li
 4. The LLM returns a structured decision (`action`, `choice`, `reasoning`).
 5. The decision is validated against the battle's actual legal moves/switches. If invalid, it's replaced with the calculator's own best-known move — the LLM's output is never trusted blindly.
 
-## Evaluation
 
-A batch-simulation harness (via [poke-env](https://github.com/hsahovic/poke-env)) runs the coach autonomously against a baseline bot across many simulated battles and reports a win rate — this measures the quality of the underlying decision logic independent of any one human playtest session. Requires a local Showdown server (see setup step 5).
+## Troubleshooting
 
-```bash
-python -m eval.run_eval
-```
+- No suggestions: check that the server, Tampermonkey, and userscript are enabled, and that the battle is on `play.pokemonshowdown.com`.
+- Gemini errors: verify `GEMINI_API_KEY` in `.env` and restart the coach.
+- Ollama errors: verify Ollama is running, the model was pulled, and `OLLAMA_URL` is correct.
+- Chroma errors: run `python build_chroma.py` from the project directory. The
+  coach can still run without the index, but suggestions will omit Smogon context.
+- Stop the coach with `Ctrl+C`.
 
-Edit `n_battles` in `eval/run_eval.py` to change how many battles are simulated. Start small (10–20) before scaling up — every turn is a real LLM call.
+Use `showdown-coach setup` so API-key input is hidden. Do not commit `.env`; it is ignored by `.gitignore`.
 
 ## Project structure
 
 ```
-app/            core application: config, state parsing, calculator, retrieval, LLM, server, CLI
-data/           Pokedex, movedex, type chart, Smogon chunks (generated by scripts/)
-scripts/        one-time data-generation scripts (not part of the running app)
-eval/           poke-env based evaluation harness
-extension/      the Tampermonkey userscript
-tests/          unit tests for the calculator
+app/            live application: CLI, server, state, calculator, retrieval, LLM, config
+data/           generated Pokedex, moves, type chart, and Smogon chunks
+userscript.js   Tampermonkey browser reader
+build_chroma.py one-time ChromaDB index builder
+tests/          one simple offline calculator benchmark
+old/            earlier reference implementations
 ```
 
-## Known limitations
+## Design limitations
 
 - Opponent stats are estimated from base stats (real EVs/IVs/nature are unknowable from a real battle).
 - Unrevealed opponent moves fall back to commonly-run Smogon sets, not confirmed information.

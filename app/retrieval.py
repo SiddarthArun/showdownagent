@@ -1,19 +1,41 @@
+import logging
+
 import chromadb
 from chromadb.utils import embedding_functions
+
 from app.config import CHROMA_DIR, settings
 
-_client = chromadb.PersistentClient(path=str(CHROMA_DIR))
-_ef = embedding_functions.DefaultEmbeddingFunction()
-_collection = _client.get_collection("smogon", embedding_function=_ef)
+logger = logging.getLogger(__name__)
+_collection = None
 
 
-def retrieve(species: str, k: int = None) -> list[str]:
+def _get_collection():
+    global _collection
+    if _collection is not None:
+        return _collection
+
+    try:
+        client = chromadb.PersistentClient(path=str(CHROMA_DIR))
+        _collection = client.get_collection(
+            "smogon",
+            embedding_function=embedding_functions.DefaultEmbeddingFunction(),
+        )
+    except Exception as error:
+        logger.warning("Smogon index unavailable: %s", error)
+    return _collection
+
+
+def retrieve(species: str, k: int | None = None) -> list[str]:
     if not species:
         return []
-    k = k or settings.retrieval_k
-    results = _collection.query(
+
+    collection = _get_collection()
+    if collection is None:
+        return []
+
+    results = collection.query(
         query_texts=[species],
         where={"species": species.lower()},
-        n_results=k,
+        n_results=k or settings.retrieval_k,
     )
-    return results["documents"][0] if results["documents"] else []
+    return results["documents"][0] if results.get("documents") else []

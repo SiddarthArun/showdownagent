@@ -1,11 +1,14 @@
-import logging,json
+import json
+import logging
+
+import requests
 from google import genai
 from app.calculator_v2 import analyze_matchup
 from app.retrieval import retrieve
 from app.config import settings
 
 logger = logging.getLogger(__name__)
-client = genai.Client(api_key=settings.gemini_api_key)
+client = genai.Client(api_key=settings.gemini_api_key) if settings.gemini_api_key else None
 
 SYSTEM_PROMPT = """You are a Pokemon Showdown coach.
 
@@ -71,8 +74,6 @@ def _build_bench_summary(state):
         item = data.get("item", "no item")
         moves_list = [m.get("move", m) if isinstance(m, dict) else m for m in data.get("moves", [])]
         bench_info.append(f"- {species} (HP: {cond}, Item: {item}, Moves: {', '.join(moves_list)})")
-    bench_summary = "\n".join(bench_info) if bench_info else "No bench Pokemon available."
-
     return "\n".join(bench_info) if bench_info else "No bench Pokemon available."
 
 def get_suggestion(state, recent_suggestions):
@@ -111,24 +112,65 @@ def get_suggestion(state, recent_suggestions):
     {context}
     """
 
-    logger.info(f"Calling {settings.model_name} for turn {state.get('turn')}")
+    logger.info(f"Calling {settings.llm_backend} for turn {state.get('turn')}")
+    response_text = _generate_response(user_content)
+    try:
+        decision = json.loads(response_text)
+    except json.JSONDecodeError:
+        logger.warning(f"Model returned non-JSON: {response_text!r}")
+        decision = {"action": "move", "choice": None, "reasoning": "Failed to parse model output."}
+
+    return validate_decision(decision, state, matchup)
+
+def _generate_response(user_content: str) -> str:
+    backend = settings.llm_backend.lower()
+    if backend == "ollama":
+        response = requests.post(
+            f"{settings.ollama_url.rstrip('/')}/api/chat",
+            json={
+                "model": settings.ollama_model,
+                "messages": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": user_content},
+                ],
+                "format": "json",
+                "stream": False,
+            },
+            timeout=120,
+        )
+        response.raise_for_status()
+        return response.json()["message"]["content"]
+
+    if backend != "gemini":
+        raise ValueError(f"Unsupported LLM_BACKEND: {settings.llm_backend}")
+    if not client:
+        raise ValueError("GEMINI_API_KEY is required when LLM_BACKEND is gemini")
+
     response = client.models.generate_content(
         model=settings.model_name,
         contents=user_content,
         config={"system_instruction": SYSTEM_PROMPT},
     )
-    try:
-        decision = json.loads(response.text)
-    except json.JSONDecodeError:
-        logger.warning(f"Model returned non-JSON: {response.text!r}")
-        decision = {"action": "move", "choice": None, "reasoning": "Failed to parse model output."}
-
-    return validate_decision(decision, state, matchup)
+    return response.text
 
 def validate_decision(decision: dict, state: dict, matchup: dict) -> dict:
     my_active = next((s for s, m in state["my_team"].items() if m["active"]), None)
-    my_moves = [m["move"] if isinstance(m, dict) else m for m in state["my_team"][my_active]["moves"]]
-    bench = [s for s, m in state["my_team"].items() if not m["active"] and m.get("condition", "0/0").split("/")[0] != "0"]
+    my_moves = []
+    for move in state["my_team"][my_active]["moves"]:
+        if isinstance(move, dict):
+            if move.get("disabled") or move.get("pp", 1) <= 0:
+                continue
+            name = move.get("move")
+        else:
+            name = move
+        if name:
+            my_moves.append(name)
+
+    bench = [
+        species
+        for species, data in state["my_team"].items()
+        if not data["active"] and data.get("condition", "0/0").split("/")[0] != "0"
+    ]
 
     action = decision.get("action")
     choice = decision.get("choice")

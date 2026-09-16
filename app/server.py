@@ -1,28 +1,43 @@
-from fastapi import FastAPI, Request
 import uvicorn
-from app.state import build_state
-from app.llm import get_suggestion
-from app.config import setup_logging
+from fastapi import FastAPI, Request
 from rich.console import Console
 from rich.panel import Panel
+
+from app.config import setup_logging
+from app.llm import get_suggestion
+from app.state import build_state
 
 setup_logging()
 console = Console()
 
 ACTION_STYLES = {"move": "green", "switch": "yellow"}
+MIN_BATTLE_TURN = 1
 
 app = FastAPI()
 last_turn_seen = None
+current_battle_title: str | None = None
 recent_suggestions: list[str] = []
+
+
+def should_process_turn(turn: int, last_seen: int | None) -> bool:
+    """Return whether a battle turn should produce a suggestion."""
+    return turn >= MIN_BATTLE_TURN and turn != last_seen
 
 
 @app.post("/state")
 async def receive_state(request: Request):
-    global last_turn_seen
+    global last_turn_seen, current_battle_title, recent_suggestions
     raw = await request.json()
-
     state = build_state(raw)
-    if not state or state["turn"] == last_turn_seen:
+    if not state:
+        return {"ok": True}
+
+    if state["title"] != current_battle_title:
+        current_battle_title = state["title"]
+        last_turn_seen = None
+        recent_suggestions = []
+
+    if not should_process_turn(state["turn"], last_turn_seen):
         return {"ok": True}
 
     last_turn_seen = state["turn"]
@@ -41,9 +56,12 @@ async def receive_state(request: Request):
             padding=(1, 2),
         ))
 
-        recent_suggestions.append(f"Turn {state['turn']}: {verb} {decision['choice']} — {decision['reasoning']}")
-    except Exception as e:
-        console.print(f"[bold red]✗ suggestion failed:[/bold red] {e}")
+        recent_suggestions.append(
+            f"Turn {state['turn']}: {verb} {decision['choice']} — {decision['reasoning']}"
+        )
+        del recent_suggestions[:-2]
+    except Exception as error:
+        console.print(f"[bold red]✗ suggestion failed:[/bold red] {error}")
 
     return {"ok": True}
 

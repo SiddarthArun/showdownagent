@@ -76,7 +76,14 @@ def analyze_matchup(state: dict) -> dict:
     status_moves = []
 
     for m in my_moves:
-        name = m["move"] if isinstance(m, dict) else m
+        if isinstance(m, dict):
+            if m.get("disabled") or m.get("pp", 1) <= 0:
+                continue
+            name = m.get("move")
+        else:
+            name = m
+        if not name:
+            continue
         move_data = MOVES.get(_id(name), {})
         if move_data.get("category") == "Status":
             status_moves.append(name)
