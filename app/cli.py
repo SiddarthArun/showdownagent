@@ -33,10 +33,18 @@ def _info() -> None:
     console.print("""[bold]Showdown Coach - complete setup[/bold]
 
 [bold cyan]1. Install the program[/bold cyan]
-Clone the repository or download/extract its ZIP, then run this in the project
-folder:
-  [bold]python -m pip install -e .[/bold]
-  (On Windows, use [bold]py -m pip install -e .[/bold] if needed.)
+Download the latest Source code (zip) from the GitHub Releases page, or clone
+the repository. Open a terminal in the extracted project folder, then create
+a virtual environment:
+  [bold]python -m venv .venv[/bold]
+
+Activate it:
+  Windows: [bold].venv\\Scripts\\activate[/bold]
+  macOS/Linux: [bold]source .venv/bin/activate[/bold]
+
+Install the source checkout:
+  Windows: [bold]py -m pip install -e .[/bold]
+  macOS/Linux: [bold]python -m pip install -e .[/bold]
 
 Keep the project folder: the userscript, battle data, and build_chroma.py are
 repository files used during setup. If the command is unavailable later, use
@@ -74,7 +82,8 @@ For Ollama instead use:
 
 [bold cyan]4. Build the local strategy index[/bold cyan]
 Run this once from the project folder:
-  [bold]python build_chroma.py[/bold]
+  Windows: [bold]py build_chroma.py[/bold]
+  macOS/Linux: [bold]python build_chroma.py[/bold]
 Repeat only if the Smogon data changes.
 
 [bold cyan]5. Start the coach[/bold cyan]
@@ -112,7 +121,10 @@ in the same browser and enter a battle. Suggestions appear from turn 1 onward.
 - Stop the coach with Ctrl+C.
 
 The browser reader and live coach use localhost. The calculator check is
-optional and never runs as part of the live tool.""")
+optional and never runs as part of the live tool.
+
+This GitHub download is a source release, not a standalone PyPI package. Keep
+the project folder after installation.""")
 
 
 @app.command()

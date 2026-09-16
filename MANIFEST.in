@@ -1,0 +1,7 @@
+include README.md
+include LICENSE
+include userscript.js
+include build_chroma.py
+recursive-include app *.py
+recursive-include data *.json *.jsonl
+recursive-include tests *.py

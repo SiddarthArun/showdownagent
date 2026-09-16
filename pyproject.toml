@@ -1,6 +1,15 @@
 [project]
 name = "showdown-coach"
 version = "0.1.0"
+description = "A local AI coach for Pokemon Showdown battles"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Operating System :: OS Independent",
+]
 dependencies = [
     "fastapi", "uvicorn", "typer", "rich", "google-genai",
     "python-dotenv", "pydantic-settings", "chromadb", "requests",

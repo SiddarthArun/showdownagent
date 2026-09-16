@@ -25,38 +25,53 @@ The core design principle: the LLM never invents damage numbers, type matchups, 
 - Tampermonkey or another userscript extension
 - Either a Gemini API key or Ollama with a downloaded model
 
-## Install
+## Install from GitHub
 
-The supported workflow is to keep the downloaded project folder and install
-its dependencies into your Python environment. This works from a Git clone,
-a downloaded ZIP, or a local source checkout.
+This project is distributed as a GitHub source download. The project folder
+must remain available after installation because it contains the browser
+userscript, battle data, Chroma index builder, and benchmark.
 
-### Clone with Git
+### Recommended: download a release ZIP
+
+1. Open the repository's **Releases** page.
+2. Download the latest `Source code (zip)` file.
+3. Extract it and open a terminal in the extracted `showdown-coach-*` folder.
+
+### Alternative: clone with Git
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/YOUR_USERNAME/showdown-coach.git
 cd showdown-coach
-python -m pip install -e .
 ```
 
-### Download as a ZIP
+### Install dependencies
 
-1. Download and extract the repository ZIP.
-2. Open a terminal in the extracted `showdown-coach` folder.
-3. Install it:
+Create an isolated Python environment, then install this source checkout:
 
 ```bash
+python -m venv .venv
+```
+
+Windows:
+
+```bash
+.venv\\Scripts\\activate
+py -m pip install -e .
+```
+
+macOS/Linux:
+
+```bash
+source .venv/bin/activate
 python -m pip install -e .
 ```
 
-The editable install is intentional: the userscript, battle data, and
-`build_chroma.py` are repository files used during setup. Do not delete the
-extracted project folder after installing. On Windows, use `py -m pip` instead
-of `python -m pip` if `python` is not available. If the installed command is
-not found later, run `python -m app.cli info` from the project folder.
+If `python` is not available on Windows, use `py` instead. The `-e` option
+keeps the installed command connected to the downloaded project folder, which
+is required by this application. Do not delete or move that folder after
+installation.
 
-The complete guide, including the exact test command and troubleshooting
-steps, is also available inside the CLI:
+The complete guide is also available after installation:
 
 ```bash
 showdown-coach info
@@ -254,6 +269,20 @@ old/            earlier reference implementations
 - Unrevealed opponent moves fall back to commonly-run Smogon sets, not confirmed information.
 - Turn-order edge cases (priority moves, Trick Room) aren't fully modeled yet.
 - Local (Ollama) models are more likely to trigger the decision-validation fallback than Gemini.
+
+## GitHub release checklist
+
+For maintainers, a downloadable release consists of the tracked source files:
+
+1. Confirm `.env`, `chroma_db/`, `.venv/`, `coach.log`, and cache files are not tracked.
+2. Push the source to GitHub.
+3. Create a tag such as `v0.1.0`.
+4. Create a GitHub Release for that tag.
+5. Tell users to download the generated **Source code (zip)** and follow the install steps above.
+
+The repository also contains `LICENSE` and `MANIFEST.in` so source archives
+retain the license and runtime assets. This is a source release, not yet a
+standalone PyPI package; users should keep the project folder.
 
 ## License
 
