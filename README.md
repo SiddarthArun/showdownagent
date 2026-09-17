@@ -186,10 +186,12 @@ python -m app.cli info
 
 ## Simple calculator check
 
-The project intentionally keeps its user-facing check small. It uses fixed
-offline battle scenarios and compares the calculator's best-damage move with
-the expected result of choosing uniformly at random from the same legal moves.
-It does not call Gemini, Ollama, the browser, or the live server.
+The project intentionally keeps its user-facing check small. It samples
+reproducible random Pokemon, opponents, and damaging moves from the local
+`data/pokedex.json` and `data/moves.json` files. For each scenario, it compares
+the calculator's best-damage move with the expected result of choosing
+uniformly at random from the same three candidate moves. It does not call
+Gemini, Ollama, the browser, or the live server.
 
 Run it from the project directory:
 
@@ -199,11 +201,12 @@ python tests/test_benchmark.py
 
 The output reports:
 
+- The random seed, so the run can be reproduced
 - Average damage from the calculator's prediction
 - Average damage from the random baseline
 - Percentage improvement over random
 - How often the calculator beats random
-- The selected move for each scenario
+- A sample of the selected moves
 
 This is a basic sanity check, not a claim of real battle win rate. It measures
 the deterministic calculator only; model quality and real-player outcomes need

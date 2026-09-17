@@ -3,29 +3,57 @@
 Run from the project directory:
     python tests/test_benchmark.py
 
-This does not call Gemini, Ollama, the browser, or the live server. It compares
-one simple prediction: the calculator's highest-damage move versus choosing
-uniformly at random from the same legal move list.
+The benchmark samples reproducible random Pokemon, opponents, and damaging
+moves from the local data files. It does not call Gemini, Ollama, the browser,
+or the live server. The calculator's best move is compared with the expected
+result of choosing uniformly at random from the same three candidate moves.
 """
 
+from random import Random
 from statistics import mean
 
-from app.calculator_v2 import estimate_damage_pct
+from app.calculator_v2 import MOVES, POKEDEX, estimate_damage_pct
+
+SEED = 2026
+SCENARIO_COUNT = 20
+MOVES_PER_SCENARIO = 3
 
 
-SCENARIOS = (
-    ("Charizard", "Bulbasaur", ("Flamethrower", "Air Slash", "Dragon Claw")),
-    ("Pikachu", "Squirtle", ("Thunderbolt", "Quick Attack", "Iron Tail")),
-    ("Garchomp", "Charizard", ("Earthquake", "Stone Edge", "Dragon Claw")),
-    ("Venusaur", "Blastoise", ("Giga Drain", "Sludge Bomb", "Energy Ball")),
-    ("Lucario", "Tyranitar", ("Aura Sphere", "Flash Cannon", "Close Combat")),
-    ("Starmie", "Charizard", ("Surf", "Psychic", "Ice Beam")),
-)
+def _database_options() -> tuple[list[str], list[str]]:
+    species = [
+        data["name"]
+        for data in POKEDEX.values()
+        if data.get("name") and data.get("types") and data.get("baseStats")
+    ]
+    moves = [
+        data["name"]
+        for data in MOVES.values()
+        if data.get("name")
+        and data.get("category") in {"Physical", "Special"}
+        and data.get("power")
+    ]
+    return species, moves
+
+
+def _scenarios(rng: Random) -> list[tuple[str, str, tuple[str, ...]]]:
+    species, moves = _database_options()
+    if len(moves) < MOVES_PER_SCENARIO or not species:
+        raise SystemExit("The local Pokemon or move database has too few usable entries.")
+
+    scenarios = []
+    for _ in range(SCENARIO_COUNT):
+        attacker = rng.choice(species)
+        defender = rng.choice(species)
+        candidates = tuple(rng.sample(moves, MOVES_PER_SCENARIO))
+        scenarios.append((attacker, defender, candidates))
+    return scenarios
 
 
 def run() -> None:
+    scenarios = _scenarios(Random(SEED))
     results = []
-    for attacker, defender, moves in SCENARIOS:
+
+    for attacker, defender, moves in scenarios:
         choices = []
         for move in moves:
             damage = estimate_damage_pct(attacker, None, move, defender)
@@ -47,14 +75,16 @@ def run() -> None:
 
     print("Showdown Coach calculator check")
     print("=" * 32)
-    print(f"Scenarios:                 {len(results)}/{len(SCENARIOS)}")
+    print(f"Seed:                      {SEED}")
+    print(f"Scenarios:                 {len(results)}/{len(scenarios)}")
     print(f"Calculator average damage: {calculator_average:.1f}%")
     print(f"Random-choice average:      {random_average:.1f}%")
     print(f"Calculator improvement:     {improvement:+.1f}%")
     print(f"Beats random baseline:      {wins}/{len(results)} ({wins / len(results) * 100:.0f}%)")
-    print("\nBest calculated choices:")
-    for _, _, move, attacker, defender in results:
+    print("\nSampled best choices:")
+    for _, _, move, attacker, defender in results[:10]:
         print(f"  {attacker} -> {defender}: {move}")
+    
 
 
 if __name__ == "__main__":

@@ -100,10 +100,12 @@ in the same browser and enter a battle. Suggestions appear from turn 1 onward.
 [bold cyan]Simple calculator check[/bold cyan]
   Run this from the project folder:
     [bold]python tests/test_benchmark.py[/bold]
-  It compares the calculator's highest-damage move with the expected damage
-  from choosing randomly among the same moves. It reports average damage,
-  improvement percentage, and how often it beats random. This is an offline
-  calculator sanity check, not a real battle win rate or LLM evaluation.
+  It samples reproducible random Pokemon and damaging moves from the local
+  database, then compares the calculator's highest-damage move with the
+  expected damage from choosing randomly among the same three moves. It
+  reports average damage, improvement percentage, and how often it beats
+  random. This is an offline calculator sanity check, not a real battle win
+  rate or LLM evaluation.
 
   Compile-check the project with:
     [bold]python -m compileall -q app tests[/bold]
